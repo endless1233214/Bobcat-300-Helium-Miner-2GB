@@ -1,0 +1,22 @@
+keypair = "ecc://i2c-5:96?slot=0&network=mainnet"
+onboarding = "ecc://i2c-5:96?slot=0&network=mainnet"
+listen = "127.0.0.1:1680"
+api = "127.0.0.1:4467"
+region = "__REGION__"
+
+[log]
+level = "info"
+timestamp = true
+
+[poc]
+entropy_uri = "http://entropy.iot.mainnet.helium.io:7080"
+ingest_uri = "http://mainnet-pociot.helium.io:9080"
+
+[config]
+pubkey = "137oJzq1qZpSbzHawaysTGGsRCYTXG1MiTMQNxYSsQJp4YMDdN8"
+uri = "http://mainnet-config.helium.io:6080/"
+
+[router]
+uri = "http://mainnet-router.helium.io:8080/"
+queue = 20
+

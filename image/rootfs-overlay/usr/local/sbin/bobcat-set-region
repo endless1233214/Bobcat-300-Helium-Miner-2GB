@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+    echo "Usage: bobcat-set-region <helium-region> [packet-forwarder-region]" >&2
+    exit 2
+fi
+
+REGION="$1"
+PF_REGION="${2:-$1}"
+
+python3 /usr/local/lib/bobcat-miner/set_region.py "$REGION" "$PF_REGION"
+systemctl restart helium-gateway.service bobcat-pktfwd.service
+

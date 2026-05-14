@@ -1,0 +1,12 @@
+[Unit]
+Description=Bobcat custom image first boot setup
+After=local-fs.target
+ConditionPathExists=!/var/lib/bobcat-miner/firstboot.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bobcat-firstboot
+
+[Install]
+WantedBy=multi-user.target
+

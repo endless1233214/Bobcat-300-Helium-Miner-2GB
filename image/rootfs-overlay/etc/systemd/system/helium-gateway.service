@@ -1,0 +1,14 @@
+[Unit]
+Description=Helium gateway-rs
+After=network-online.target bobcat-firstboot.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/bobcat-miner/config.env
+ExecStart=/usr/local/bin/helium_gateway -c /etc/helium_gateway/settings.toml server
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

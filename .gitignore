@@ -1,0 +1,17 @@
+_work/
+dist/
+downloads/
+logs/
+*.img
+*.img.*
+*.raw
+*.qcow2
+*.zip
+*.tar
+*.tar.*
+*.xz
+*.sha256
+*.sha512
+.DS_Store
+__pycache__/
+*.pyc

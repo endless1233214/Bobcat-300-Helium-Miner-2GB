@@ -1,0 +1,15 @@
+[Unit]
+Description=Bobcat SX1302 packet forwarder
+After=network-online.target helium-gateway.service bobcat-firstboot.service
+Wants=network-online.target helium-gateway.service
+
+[Service]
+EnvironmentFile=/etc/bobcat-miner/config.env
+WorkingDirectory=/opt/bobcat-miner/pktfwd/run
+ExecStart=/usr/local/sbin/bobcat-pktfwd
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
