@@ -282,17 +282,30 @@ cat > "$STAGED/etc/fstab" <<EOF
 UUID=$ROOT_UUID / ext4 defaults,noatime,errors=remount-ro 0 1
 EOF
 
+WEBUI_CREDENTIAL_MODE="${WEBUI_CREDENTIAL_MODE:-build}"
 WEBUI_USER="${WEBUI_USER:-admin}"
 WEBUI_PASSWORD="${WEBUI_PASSWORD:-$(python3 - <<'PY'
 import secrets
 print(secrets.token_urlsafe(18))
 PY
 )}"
-cat > "$STAGED/etc/bobcat-miner/webui.env" <<EOF
+case "$WEBUI_CREDENTIAL_MODE" in
+  build)
+    cat > "$STAGED/etc/bobcat-miner/webui.env" <<EOF
 BOBCAT_WEBUI_USER=$WEBUI_USER
 BOBCAT_WEBUI_PASSWORD=$WEBUI_PASSWORD
 EOF
-chmod 0600 "$STAGED/etc/bobcat-miner/webui.env"
+    chmod 0600 "$STAGED/etc/bobcat-miner/webui.env"
+    ;;
+  setup)
+    rm -f "$STAGED/etc/bobcat-miner/webui.env"
+    touch "$STAGED/etc/bobcat-miner/webui-first-run-setup"
+    ;;
+  *)
+    echo "Unsupported WEBUI_CREDENTIAL_MODE=$WEBUI_CREDENTIAL_MODE. Use build or setup." >&2
+    exit 2
+    ;;
+esac
 
 if [[ -n "${AUTHORIZED_KEY_FILE:-}" ]]; then
   cp "$AUTHORIZED_KEY_FILE" "$STAGED/etc/bobcat-miner/authorized_keys"
@@ -356,7 +369,8 @@ mv "$TMP_OUT" "$OUT"
 shasum -a 256 "$OUT" > "$OUT.sha256"
 
 CREDENTIALS="$DIST/${IMAGE_NAME}.credentials.txt"
-cat > "$CREDENTIALS" <<EOF
+if [[ "$WEBUI_CREDENTIAL_MODE" == "build" ]]; then
+  cat > "$CREDENTIALS" <<EOF
 Web UI:
   URL: http://<dhcp-address>/
   Username: $WEBUI_USER
@@ -370,6 +384,22 @@ Image:
   $OUT
   $(cat "$OUT.sha256")
 EOF
+else
+  cat > "$CREDENTIALS" <<EOF
+Web UI:
+  URL: http://<dhcp-address>/
+  Credentials: create them on first visit from a trusted LAN.
+
+Note:
+  This image was built with WEBUI_CREDENTIAL_MODE=setup, so no shared web UI
+  password is baked into the image. Use your router DHCP table or an ARP scan
+  to find the address, open the web UI, and create the admin login.
+
+Image:
+  $OUT
+  $(cat "$OUT.sha256")
+EOF
+fi
 chmod 0600 "$CREDENTIALS"
 
 echo

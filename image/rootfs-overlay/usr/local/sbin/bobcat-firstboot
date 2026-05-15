@@ -2,6 +2,7 @@
 set -eu
 
 mkdir -p /var/lib/bobcat-miner /etc/bobcat-miner
+WEBUI_SETUP_MARKER=/etc/bobcat-miner/webui-first-run-setup
 
 if [ ! -s /etc/machine-id ]; then
     systemd-machine-id-setup >/dev/null 2>&1 || true
@@ -26,7 +27,7 @@ install -d -m 755 /etc/sudoers.d
 } > /etc/sudoers.d/90-bobcat-admin
 chmod 0440 /etc/sudoers.d/90-bobcat-admin
 
-if [ ! -s /etc/bobcat-miner/webui.env ]; then
+if [ ! -e "$WEBUI_SETUP_MARKER" ] && [ ! -s /etc/bobcat-miner/webui.env ]; then
     password="$(python3 - <<'PY'
 import secrets
 print(secrets.token_urlsafe(18))

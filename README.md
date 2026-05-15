@@ -19,6 +19,13 @@ Do not flash a miner whose original eMMC has not been backed up.
 The builder intentionally does not commit large vendor images or binaries. It
 downloads public upstream releases during the build, extracts only the Bobcat
 board-support pieces needed to boot, and writes a custom image to `dist/`.
+Prebuilt images, when published, should be attached to GitHub Releases rather
+than committed to the repository.
+
+The latest field-tested path is the Crankk-style boot profile. On the first test
+Bobcat, that image booted, brought up Ethernet, started `gateway-rs`, initialized
+the SX1302 packet forwarder, and acknowledged local `PUSH_DATA`/`PULL_DATA`
+traffic between the packet forwarder and gateway.
 
 ## Quick Start On macOS
 
@@ -75,6 +82,21 @@ builder writes generated credentials next to the image:
 ```text
 dist/bobcat300-rk3566-custom.credentials.txt
 ```
+
+By default, each local build generates a fresh web UI password and bakes it into
+that one image. If you publish a prebuilt image for other people, build it in
+first-run setup mode instead so everyone does not share the same password:
+
+```sh
+WEBUI_CREDENTIAL_MODE=setup \
+BOOT_PROFILE=crank \
+CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
+scripts/build-image.sh
+```
+
+In setup mode, no web UI password is baked into the image. The first visit to
+`http://<dhcp-address>/` from a trusted LAN asks the user to create their own
+admin login, then normal Basic Auth is enabled.
 
 SSH can be enabled with your public key at build time. The image creates a
 `bobcat` admin user for that key and grants passwordless `sudo`, so field fixes

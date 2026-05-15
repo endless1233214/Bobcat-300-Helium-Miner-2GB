@@ -41,6 +41,18 @@ def service_state(unit):
     return run(["systemctl", "is-active", f"{unit}.service"], timeout=3) or "unknown"
 
 
+def setup_required():
+    return not read_env(WEBUI).get("BOBCAT_WEBUI_PASSWORD")
+
+
+def write_webui_credentials(user, password):
+    WEBUI.parent.mkdir(parents=True, exist_ok=True)
+    tmp = WEBUI.with_name(f"{WEBUI.name}.tmp")
+    tmp.write_text(f"BOBCAT_WEBUI_USER={user}\nBOBCAT_WEBUI_PASSWORD={password}\n")
+    tmp.chmod(0o600)
+    tmp.replace(WEBUI)
+
+
 def status_payload():
     cfg = read_env(CONFIG)
     return {
@@ -58,7 +70,9 @@ def status_payload():
 def check_auth(handler):
     env = read_env(WEBUI)
     user = env.get("BOBCAT_WEBUI_USER", "admin")
-    password = env.get("BOBCAT_WEBUI_PASSWORD", "bobcat")
+    password = env.get("BOBCAT_WEBUI_PASSWORD", "")
+    if not password:
+        return False
     expected = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
     if handler.headers.get("Authorization") == expected:
         return True
@@ -66,6 +80,60 @@ def check_auth(handler):
     handler.send_header("WWW-Authenticate", 'Basic realm="Bobcat 300"')
     handler.end_headers()
     return False
+
+
+def setup_page():
+    return """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bobcat 300 Setup</title>
+<style>
+body{margin:0;font:15px system-ui,-apple-system,Segoe UI,sans-serif;background:#f7f7f3;color:#20231f}
+header{padding:22px 24px;background:#1f352e;color:white}
+main{max-width:520px;margin:0 auto;padding:24px;display:grid;gap:18px}
+h1{font-size:24px;margin:0} h2{font-size:18px;margin:0 0 12px}
+section{background:white;border:1px solid #d9ddd4;border-radius:8px;padding:16px}
+label{display:grid;gap:6px;margin:0 0 12px}
+button,input{font:inherit} button{border:0;border-radius:6px;background:#285e4a;color:white;padding:9px 12px;cursor:pointer}
+input{border:1px solid #bfc7ba;border-radius:6px;padding:8px;width:100%;box-sizing:border-box}
+.error{color:#a43a2e;font-weight:700}
+</style>
+</head>
+<body>
+<header><h1>Bobcat 300</h1></header>
+<main>
+<section>
+<h2>Create Web UI Login</h2>
+<form id="setup-form">
+<label>Username<input name="user" value="admin" autocomplete="username"></label>
+<label>Password<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+<label>Confirm password<input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
+<button>Save</button>
+<p id="message" class="error"></p>
+</form>
+</section>
+</main>
+<script>
+document.getElementById('setup-form').onsubmit = async ev => {
+  ev.preventDefault();
+  const form = new FormData(ev.target);
+  const data = Object.fromEntries(form.entries());
+  if (data.password !== data.confirm) {
+    document.getElementById('message').textContent = 'Passwords do not match.';
+    return;
+  }
+  const res = await fetch('/api/setup', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(data)});
+  if (!res.ok) {
+    document.getElementById('message').textContent = await res.text();
+    return;
+  }
+  location.reload();
+};
+</script>
+</body>
+</html>"""
 
 
 def page():
@@ -144,9 +212,12 @@ document.getElementById('region-form').onsubmit = ev => {{
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if setup_required():
+            self.send_html(setup_page())
+            return
         if not check_auth(self):
             return
-        parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/status":
             self.send_json(status_payload())
         elif parsed.path == "/api/logs":
@@ -161,14 +232,30 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(page())
 
     def do_POST(self):
-        if not check_auth(self):
-            return
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length).decode() if length else "{}"
         try:
             data = json.loads(body)
         except json.JSONDecodeError:
             self.send_error(400, "invalid json")
+            return
+        if setup_required():
+            if self.path != "/api/setup":
+                self.send_error(403, "web ui setup required")
+                return
+            user = str(data.get("user", "admin")).strip() or "admin"
+            password = str(data.get("password", ""))
+            confirm = str(data.get("confirm", ""))
+            if password != confirm:
+                self.send_error(400, "passwords do not match")
+                return
+            if len(password) < 12:
+                self.send_error(400, "password must be at least 12 characters")
+                return
+            write_webui_credentials(user, password)
+            self.send_json({"ok": True})
+            return
+        if not check_auth(self):
             return
         if self.path == "/api/restart":
             service = data.get("service", "")
@@ -222,4 +309,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
