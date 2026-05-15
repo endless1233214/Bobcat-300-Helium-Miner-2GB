@@ -13,6 +13,7 @@ IMAGE_NAME="${IMAGE_NAME:-bobcat300-rk3566-custom}"
 IMAGE_SIZE_MIB="${IMAGE_SIZE_MIB:-4096}"
 REGION="${REGION:-US915}"
 PF_REGION="${PF_REGION:-US915_SB2}"
+BOOT_PROFILE="${BOOT_PROFILE:-nebra}"
 
 DEBIAN_BASE_URL="${DEBIAN_BASE_URL:-https://cloud.debian.org/images/cloud/bookworm/latest}"
 DEBIAN_TAR="${DEBIAN_TAR:-debian-12-generic-arm64.tar.xz}"
@@ -25,9 +26,22 @@ GATEWAY_VERSION="${GATEWAY_VERSION:-1.3.0}"
 GATEWAY_TAR="${GATEWAY_TAR:-helium-gateway-${GATEWAY_VERSION}-aarch64-unknown-linux-musl.tar.gz}"
 GATEWAY_URL="${GATEWAY_URL:-https://github.com/helium/gateway-rs/releases/download/v${GATEWAY_VERSION}/${GATEWAY_TAR}}"
 
-P1_START=81920
-P1_SECTORS=81920
-P2_START=163840
+case "$BOOT_PROFILE" in
+  nebra)
+    P1_START=81920
+    P1_SECTORS=81920
+    P2_START=163840
+    ;;
+  crank)
+    P1_START=40960
+    P1_SECTORS=61440
+    P2_START=204800
+    ;;
+  *)
+    echo "Unsupported BOOT_PROFILE=$BOOT_PROFILE. Use nebra or crank." >&2
+    exit 2
+    ;;
+esac
 
 LORA_PKT_FWD_PATH="/docker/overlay2/11a0e1435ce77ee2123246c602cf54ce796ad06fc207454dc1350eb15be1d0e0/diff/opt/sx1302/lora_pkt_fwd"
 CHIP_ID_PATH="/docker/overlay2/11a0e1435ce77ee2123246c602cf54ce796ad06fc207454dc1350eb15be1d0e0/diff/opt/sx1302/chip_id"
@@ -130,8 +144,34 @@ if [[ ! -f "$NEBRA_IMG" ]]; then
   unzip -p "$NEBRA_ZIP" "$member" > "$NEBRA_IMG"
 fi
 
+CRANK_IMG=""
+if [[ "$BOOT_PROFILE" == "crank" ]]; then
+  need xz
+  CRANK_IMG="$WORK/crankkos-bobcatrk3566-1.0.0.img"
+  if [[ -n "${CRANK_IMAGE:-}" ]]; then
+    CRANK_IMG="$CRANK_IMAGE"
+  elif [[ -f "$CRANK_IMG" ]]; then
+    :
+  elif [[ -n "${CRANK_IMAGE_XZ:-}" && -f "$CRANK_IMAGE_XZ" ]]; then
+    xz -dc "$CRANK_IMAGE_XZ" > "$CRANK_IMG"
+  elif [[ -f "$DOWNLOADS/crankkos-bobcatrk3566-1.0.0.img.xz" ]]; then
+    xz -dc "$DOWNLOADS/crankkos-bobcatrk3566-1.0.0.img.xz" > "$CRANK_IMG"
+  else
+    cat >&2 <<'MSG'
+BOOT_PROFILE=crank requires a Crankk Bobcat RK3566 image.
+Set CRANK_IMAGE=/path/to/crankkos-bobcatrk3566-1.0.0.img or
+CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz.
+MSG
+    exit 2
+  fi
+fi
+
 echo "Reference image partitions:"
 python3 "$TOOLS/partinfo.py" "$NEBRA_IMG"
+if [[ "$BOOT_PROFILE" == "crank" ]]; then
+  echo "Crank boot image partitions:"
+  python3 "$TOOLS/partinfo.py" "$CRANK_IMG"
+fi
 
 BOARD="$WORK/board-support"
 PKTFWD="$WORK/pktfwd"
@@ -143,10 +183,21 @@ extract_partition "$NEBRA_IMG" 1 "$NEBRA_P1"
 extract_partition "$NEBRA_IMG" 2 "$NEBRA_ROOTA"
 extract_partition "$NEBRA_IMG" 6 "$NEBRA_DATA"
 
-debugfs_dump "$NEBRA_ROOTA" "/boot/Image" "$BOARD/Image"
-debugfs_dump "$NEBRA_ROOTA" "/boot/rk3566-bobcat.dtb" "$BOARD/rk3566-bobcat.dtb"
-mcopy -i "$NEBRA_P1" ::idbloader.bin "$BOARD/idbloader.bin" >/dev/null 2>&1 || true
-mcopy -i "$NEBRA_P1" ::uboot.img "$BOARD/uboot.img" >/dev/null 2>&1 || true
+CRANK_P1=""
+if [[ "$BOOT_PROFILE" == "crank" ]]; then
+  CRANK_P1="$WORK/crank-part1-fat.img"
+  extract_partition "$CRANK_IMG" 1 "$CRANK_P1"
+fi
+
+if [[ "$BOOT_PROFILE" == "crank" ]]; then
+  mcopy -i "$CRANK_P1" ::Image "$BOARD/Image" >/dev/null
+  mcopy -i "$CRANK_P1" ::rk3566-bobcat.dtb "$BOARD/rk3566-bobcat.dtb" >/dev/null
+else
+  debugfs_dump "$NEBRA_ROOTA" "/boot/Image" "$BOARD/Image"
+  debugfs_dump "$NEBRA_ROOTA" "/boot/rk3566-bobcat.dtb" "$BOARD/rk3566-bobcat.dtb"
+  mcopy -i "$NEBRA_P1" ::idbloader.bin "$BOARD/idbloader.bin" >/dev/null 2>&1 || true
+  mcopy -i "$NEBRA_P1" ::uboot.img "$BOARD/uboot.img" >/dev/null 2>&1 || true
+fi
 
 debugfs_dump "$NEBRA_DATA" "$LORA_PKT_FWD_PATH" "$PKTFWD/lora_pkt_fwd"
 debugfs_dump "$NEBRA_DATA" "$CHIP_ID_PATH" "$PKTFWD/chip_id"
@@ -185,7 +236,11 @@ truncate -s "$ROOT_BYTES" "$ROOTFS"
 e2fsck -fy "$ROOTFS" >/dev/null
 resize2fs "$ROOTFS" >/dev/null
 tune2fs -U random "$ROOTFS" >/dev/null
-ROOT_UUID="$(tune2fs -l "$ROOTFS" | awk -F': ' '/Filesystem UUID/ {print $2}')"
+ROOT_UUID="$(tune2fs -l "$ROOTFS" | awk -F: '/Filesystem UUID/ {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2}')"
+if [[ -z "$ROOT_UUID" ]]; then
+  echo "Could not read root filesystem UUID." >&2
+  exit 1
+fi
 
 STAGED="$WORK/rootfs-overlay"
 rm -rf "$STAGED"
@@ -264,27 +319,35 @@ e2fsck -fy "$ROOTFS" >/dev/null
 
 BOOT_FAT="$WORK/boot-fat.img"
 rm -f "$BOOT_FAT"
-truncate -s $(( P1_SECTORS * 512 )) "$BOOT_FAT"
-mkfs.fat -F 16 -n RESIN-BOOT "$BOOT_FAT" >/dev/null
-BOOT_FILES="$WORK/boot-fat-files"
-rm -rf "$BOOT_FILES"
-mkdir -p "$BOOT_FILES"
-touch "$BOOT_FILES/balena-image"
-touch "$BOOT_FILES/extra_uEnv.txt"
-cp "$BOARD/idbloader.bin" "$BOOT_FILES/idbloader.bin" 2>/dev/null || true
-cp "$BOARD/uboot.img" "$BOOT_FILES/uboot.img" 2>/dev/null || true
-for file in "$BOOT_FILES"/*; do
-  [[ -f "$file" ]] || continue
-  mcopy -i "$BOOT_FAT" "$file" "::$(basename "$file")"
-done
+if [[ "$BOOT_PROFILE" == "crank" ]]; then
+  cp "$CRANK_P1" "$BOOT_FAT"
+else
+  truncate -s $(( P1_SECTORS * 512 )) "$BOOT_FAT"
+  mkfs.fat -F 16 -n RESIN-BOOT "$BOOT_FAT" >/dev/null
+  BOOT_FILES="$WORK/boot-fat-files"
+  rm -rf "$BOOT_FILES"
+  mkdir -p "$BOOT_FILES"
+  touch "$BOOT_FILES/balena-image"
+  touch "$BOOT_FILES/extra_uEnv.txt"
+  cp "$BOARD/idbloader.bin" "$BOOT_FILES/idbloader.bin" 2>/dev/null || true
+  cp "$BOARD/uboot.img" "$BOOT_FILES/uboot.img" 2>/dev/null || true
+  for file in "$BOOT_FILES"/*; do
+    [[ -f "$file" ]] || continue
+    mcopy -i "$BOOT_FAT" "$file" "::$(basename "$file")"
+  done
+fi
 
 OUT="$DIST/${IMAGE_NAME}.img"
 TMP_OUT="$WORK/${IMAGE_NAME}.img"
 rm -f "$TMP_OUT" "$OUT"
 truncate -s "${IMAGE_SIZE_MIB}M" "$TMP_OUT"
-dd if="$NEBRA_IMG" of="$TMP_OUT" bs=1048576 count=40 conv=notrunc status=none
-dd if="$BOOT_FAT" of="$TMP_OUT" bs=1048576 seek=40 conv=notrunc status=none
-dd if="$ROOTFS" of="$TMP_OUT" bs=1048576 seek=80 conv=notrunc status=progress
+PREBOOT_IMAGE="$NEBRA_IMG"
+if [[ "$BOOT_PROFILE" == "crank" ]]; then
+  PREBOOT_IMAGE="$CRANK_IMG"
+fi
+dd if="$PREBOOT_IMAGE" of="$TMP_OUT" bs=512 count="$P1_START" conv=notrunc status=none
+dd if="$BOOT_FAT" of="$TMP_OUT" bs=512 seek="$P1_START" conv=notrunc status=none
+dd if="$ROOTFS" of="$TMP_OUT" bs=1048576 seek="$(( P2_START / 2048 ))" conv=notrunc status=progress
 python3 "$TOOLS/write_mbr.py" "$TMP_OUT" \
   --p1-start "$P1_START" --p1-sectors "$P1_SECTORS" \
   --p2-start "$P2_START" --p2-sectors "$P2_SECTORS"
@@ -295,9 +358,13 @@ shasum -a 256 "$OUT" > "$OUT.sha256"
 CREDENTIALS="$DIST/${IMAGE_NAME}.credentials.txt"
 cat > "$CREDENTIALS" <<EOF
 Web UI:
-  URL: http://bobcat300.local/ or http://<dhcp-address>/
+  URL: http://<dhcp-address>/
   Username: $WEBUI_USER
   Password: $WEBUI_PASSWORD
+
+Note:
+  mDNS/Avahi is not installed yet, so bobcat300.local may not resolve.
+  Use your router DHCP table or an ARP scan to find the address.
 
 Image:
   $OUT

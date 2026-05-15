@@ -46,6 +46,17 @@ Build the custom image:
 REGION=US915 PF_REGION=US915_SB2 scripts/build-image.sh
 ```
 
+Build with the Crankk-style boot path, useful when validating plain Debian
+userspace on Bobcat hardware:
+
+```sh
+BOOT_PROFILE=crank \
+CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
+IMAGE_NAME=bobcat300-rk3566-crankboot \
+REGION=US915 PF_REGION=US915_SB2 \
+scripts/build-image.sh
+```
+
 Flash only after you have a backup:
 
 ```sh
@@ -57,8 +68,9 @@ scripts/flash-image.sh dist/bobcat300-rk3566-custom.img
 The image enables DHCP on Ethernet and Wi-Fi interfaces. Start with Ethernet if
 possible.
 
-The web UI listens on port `80`. The builder writes generated credentials next
-to the image:
+The web UI listens on port `80`. Use the device IP from your router DHCP table.
+mDNS/Avahi is not installed yet, so `bobcat300.local` may not resolve. The
+builder writes generated credentials next to the image:
 
 ```text
 dist/bobcat300-rk3566-custom.credentials.txt
@@ -87,4 +99,3 @@ AUTHORIZED_KEY_FILE=~/.ssh/id_ed25519.pub scripts/build-image.sh
 - `tools/` - small Python utilities used by the image builder.
 - `image/rootfs-overlay/` - files injected into the Debian root filesystem.
 - `docs/` - hardware notes, flashing workflow, and research findings.
-

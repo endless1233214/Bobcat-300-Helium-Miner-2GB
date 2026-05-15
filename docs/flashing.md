@@ -57,3 +57,28 @@ scripts/flash-image.sh dist/bobcat300-rk3566-custom.img
 
 The flash helper requires typing `FLASH-BOBCAT-CUSTOM` before it writes.
 
+## If Ethernet LEDs Stay Dark
+
+The first custom image build had a malformed `/etc/fstab` `UUID=` line that
+could prevent normal systemd boot. Rebuild with the fixed builder and flash the
+newer `dist/bobcat300-rk3566-custom-v2.img` or any later image.
+
+If Ethernet LEDs still stay dark after the corrected image, collect the boot
+console. The reference U-Boot passes:
+
+```text
+console=ttyFIQ0,1500000
+```
+
+So the UART speed to try is `1500000`, not `115200`.
+
+There is also a Crankk-style boot profile in `scripts/build-image.sh`. It uses
+the known-working Crankk Bobcat RK3566 preboot area and FAT boot script while
+keeping this project's custom Debian root filesystem:
+
+```sh
+BOOT_PROFILE=crank \
+CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
+IMAGE_NAME=bobcat300-rk3566-crankboot \
+scripts/build-image.sh
+```

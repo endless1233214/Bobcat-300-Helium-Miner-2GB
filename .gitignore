@@ -2,6 +2,7 @@ _work/
 dist/
 downloads/
 logs/
+log/
 *.img
 *.img.*
 *.raw

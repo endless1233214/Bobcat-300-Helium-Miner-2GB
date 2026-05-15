@@ -31,3 +31,15 @@ The first custom image uses:
 - Bobcat SX1302 packet forwarder files extracted from the reference image until
   the project replaces them with a from-source build.
 
+## Known-Good Image Comparison
+
+The Crankk Bobcat RK3566 image uses a simpler boot layout than Nebra/OpenFleet:
+
+- partition 1 starts at LBA 40960 and contains `boot.scr`, `uEnv.txt`, `Image`,
+  `initrd.gz`, and `rk3566-bobcat.dtb`
+- partition 2 starts at LBA 204800 and is the root filesystem
+- `boot.scr` sets `root=/dev/mmcblk0p2` and passes an initrd to `booti`
+
+This is useful for a plain root filesystem because it avoids the Nebra/Balena
+U-Boot environment that discovers the root partition by UUID and expects a
+Balena-style boot marker.
