@@ -7,10 +7,13 @@ RUN_DIR="${CONFIG_DIR}/run"
 mkdir -p "$RUN_DIR"
 /usr/bin/python3 /usr/local/lib/bobcat-miner/render-pktfwd-config.py
 
-if [ -x /opt/bobcat-miner/pktfwd/reset_lgw.sh ]; then
-    CONCENTRATOR_RESET_PIN="${BOBCAT_RESET_GPIO:-149}" /opt/bobcat-miner/pktfwd/reset_lgw.sh start || true
+export CONCENTRATOR_RESET_PIN="${BOBCAT_RESET_GPIO:-149}"
+
+if [ -x "${CONFIG_DIR}/reset_lgw.sh" ]; then
+    cp "${CONFIG_DIR}/reset_lgw.sh" "${RUN_DIR}/reset_lgw.sh"
+    chmod 0755 "${RUN_DIR}/reset_lgw.sh"
+    "${RUN_DIR}/reset_lgw.sh" start || true
 fi
 
 cd "$RUN_DIR"
-exec /opt/bobcat-miner/pktfwd/lora_pkt_fwd
-
+exec "${CONFIG_DIR}/lora_pkt_fwd"

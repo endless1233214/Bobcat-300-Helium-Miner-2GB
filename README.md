@@ -76,7 +76,9 @@ builder writes generated credentials next to the image:
 dist/bobcat300-rk3566-custom.credentials.txt
 ```
 
-SSH can be enabled with your public key at build time:
+SSH can be enabled with your public key at build time. The image creates a
+`bobcat` admin user for that key and grants passwordless `sudo`, so field fixes
+can be applied without reflashing once SSH is reachable:
 
 ```sh
 AUTHORIZED_KEY_FILE=~/.ssh/id_ed25519.pub scripts/build-image.sh

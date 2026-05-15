@@ -43,3 +43,22 @@ The Crankk Bobcat RK3566 image uses a simpler boot layout than Nebra/OpenFleet:
 This is useful for a plain root filesystem because it avoids the Nebra/Balena
 U-Boot environment that discovers the root partition by UUID and expects a
 Balena-style boot marker.
+
+## First Crank-Boot Field Logs
+
+The `bobcat300-rk3566-crankboot-v3` image booted on the test Bobcat. Ethernet,
+`systemd`, the web UI, `gateway-rs`, the ECC identity, and the Helium router
+path were all alive:
+
+- `helium_gateway` started as gateway-rs `1.3.0`
+- the gateway API listened on `127.0.0.1:4467`
+- the local UDP gateway listener started on `127.0.0.1:1680`
+- the region watcher fetched US915 config from Helium mainnet
+
+The remaining failure was in the packet forwarder wrapper. `lora_pkt_fwd`
+starts from `/opt/bobcat-miner/pktfwd/run` and internally executes
+`./reset_lgw.sh`, but the helper had only been installed one directory above.
+The log showed `sh: 1: ./reset_lgw.sh: not found` followed by
+`ERROR: failed to reset SX1302`. The wrapper now copies `reset_lgw.sh` into the
+run directory and exports `CONCENTRATOR_RESET_PIN=149` before launching the
+forwarder.
