@@ -29,6 +29,8 @@ first test Bobcat, that image booted, brought up Ethernet, started
 
 ## Quick Start On macOS
 
+Refer to Docs for Windows/Linux
+
 Install dependencies and build `rkdeveloptool`:
 
 ```sh
