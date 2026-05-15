@@ -13,32 +13,26 @@ IMAGE_NAME="${IMAGE_NAME:-bobcat300-rk3566-custom}"
 IMAGE_SIZE_MIB="${IMAGE_SIZE_MIB:-4096}"
 REGION="${REGION:-US915}"
 PF_REGION="${PF_REGION:-US915_SB2}"
-BOOT_PROFILE="${BOOT_PROFILE:-nebra}"
+BOOT_PROFILE="${BOOT_PROFILE:-simple}"
 
 DEBIAN_BASE_URL="${DEBIAN_BASE_URL:-https://cloud.debian.org/images/cloud/bookworm/latest}"
 DEBIAN_TAR="${DEBIAN_TAR:-debian-12-generic-arm64.tar.xz}"
 
-NEBRA_TAG="${NEBRA_TAG:-v1.3.3-helium-bobcat-rk3566-2024-07-12-OpenFleet}"
-NEBRA_ASSET="${NEBRA_ASSET:-helium-bobcat-rk3566-2024-07-12.zip}"
-NEBRA_BASE_URL="${NEBRA_BASE_URL:-https://github.com/NebraLtd/helium-bobcat-rk3566/releases/download/$NEBRA_TAG}"
+SUPPORT_IMAGE_ASSET="${SUPPORT_IMAGE_ASSET:-bobcat-rk3566-support.zip}"
+SUPPORT_IMAGE_BASE_URL="${SUPPORT_IMAGE_BASE_URL:-}"
 
 GATEWAY_VERSION="${GATEWAY_VERSION:-1.3.0}"
 GATEWAY_TAR="${GATEWAY_TAR:-helium-gateway-${GATEWAY_VERSION}-aarch64-unknown-linux-musl.tar.gz}"
 GATEWAY_URL="${GATEWAY_URL:-https://github.com/helium/gateway-rs/releases/download/v${GATEWAY_VERSION}/${GATEWAY_TAR}}"
 
 case "$BOOT_PROFILE" in
-  nebra)
-    P1_START=81920
-    P1_SECTORS=81920
-    P2_START=163840
-    ;;
-  crank)
+  simple)
     P1_START=40960
     P1_SECTORS=61440
     P2_START=204800
     ;;
   *)
-    echo "Unsupported BOOT_PROFILE=$BOOT_PROFILE. Use nebra or crank." >&2
+    echo "Unsupported BOOT_PROFILE=$BOOT_PROFILE. Use simple." >&2
     exit 2
     ;;
 esac
@@ -54,7 +48,7 @@ mkdir -p "$WORK" "$DOWNLOADS" "$DIST"
 need() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing dependency: $1" >&2
-    echo "Run scripts/bootstrap-macos.sh first." >&2
+    echo "Run scripts/bootstrap-macos.sh or scripts/bootstrap-linux.sh first." >&2
     exit 2
   fi
 }
@@ -111,15 +105,37 @@ if [[ -z "$DEBIAN_EXPECTED" || "$DEBIAN_EXPECTED" != "$DEBIAN_ACTUAL" ]]; then
   exit 1
 fi
 
-NEBRA_ZIP="$DOWNLOADS/$NEBRA_ASSET"
-NEBRA_ZIP_SHA="$DOWNLOADS/$NEBRA_ASSET.sha512"
-download "$NEBRA_BASE_URL/$NEBRA_ASSET" "$NEBRA_ZIP"
-download "$NEBRA_BASE_URL/$NEBRA_ASSET.sha512" "$NEBRA_ZIP_SHA"
-NEBRA_EXPECTED="$(awk '{print $1; exit}' "$NEBRA_ZIP_SHA")"
-NEBRA_ACTUAL="$(shasum -a 512 "$NEBRA_ZIP" | awk '{print $1}')"
-if [[ "$NEBRA_EXPECTED" != "$NEBRA_ACTUAL" ]]; then
-  echo "Nebra reference image SHA512 verification failed." >&2
-  exit 1
+SUPPORT_ZIP="$DOWNLOADS/$SUPPORT_IMAGE_ASSET"
+SUPPORT_ZIP_SHA="$DOWNLOADS/$SUPPORT_IMAGE_ASSET.sha512"
+if [[ -n "${SUPPORT_IMAGE_ZIP:-}" ]]; then
+  SUPPORT_ZIP="$SUPPORT_IMAGE_ZIP"
+elif [[ ! -f "$SUPPORT_ZIP" ]]; then
+  if [[ -z "$SUPPORT_IMAGE_BASE_URL" ]]; then
+    cat >&2 <<'MSG'
+Missing support image zip.
+Set SUPPORT_IMAGE_ZIP=/path/to/bobcat-rk3566-support.zip, or set
+SUPPORT_IMAGE_BASE_URL and SUPPORT_IMAGE_ASSET to download it.
+MSG
+    exit 2
+  fi
+  download "$SUPPORT_IMAGE_BASE_URL/$SUPPORT_IMAGE_ASSET" "$SUPPORT_ZIP"
+fi
+if [[ -n "${SUPPORT_IMAGE_SHA512:-}" ]]; then
+  SUPPORT_EXPECTED="$SUPPORT_IMAGE_SHA512"
+elif [[ -f "$SUPPORT_ZIP_SHA" ]]; then
+  SUPPORT_EXPECTED="$(awk '{print $1; exit}' "$SUPPORT_ZIP_SHA")"
+elif [[ -n "$SUPPORT_IMAGE_BASE_URL" ]]; then
+  download "$SUPPORT_IMAGE_BASE_URL/$SUPPORT_IMAGE_ASSET.sha512" "$SUPPORT_ZIP_SHA"
+  SUPPORT_EXPECTED="$(awk '{print $1; exit}' "$SUPPORT_ZIP_SHA")"
+else
+  SUPPORT_EXPECTED=""
+fi
+if [[ -n "$SUPPORT_EXPECTED" ]]; then
+  SUPPORT_ACTUAL="$(shasum -a 512 "$SUPPORT_ZIP" | awk '{print $1}')"
+  if [[ "$SUPPORT_EXPECTED" != "$SUPPORT_ACTUAL" ]]; then
+    echo "Support image SHA512 verification failed." >&2
+    exit 1
+  fi
 fi
 
 GATEWAY_ARCHIVE="$DOWNLOADS/$GATEWAY_TAR"
@@ -134,78 +150,59 @@ if [[ ! -f "$DEBIAN_RAW" ]]; then
   rmdir "$WORK/debian-extract"
 fi
 
-NEBRA_IMG="$WORK/$NEBRA_ASSET.img"
-if [[ ! -f "$NEBRA_IMG" ]]; then
-  member="$(unzip -Z1 "$NEBRA_ZIP" | grep -E '\.img$' | head -1)"
+SUPPORT_IMG="$WORK/$SUPPORT_IMAGE_ASSET.img"
+if [[ ! -f "$SUPPORT_IMG" ]]; then
+  member="$(unzip -Z1 "$SUPPORT_ZIP" | grep -E '\.img$' | head -1)"
   if [[ -z "$member" ]]; then
-    echo "Could not find .img inside $NEBRA_ZIP" >&2
+    echo "Could not find .img inside $SUPPORT_ZIP" >&2
     exit 1
   fi
-  unzip -p "$NEBRA_ZIP" "$member" > "$NEBRA_IMG"
+  unzip -p "$SUPPORT_ZIP" "$member" > "$SUPPORT_IMG"
 fi
 
-CRANK_IMG=""
-if [[ "$BOOT_PROFILE" == "crank" ]]; then
-  need xz
-  CRANK_IMG="$WORK/crankkos-bobcatrk3566-1.0.0.img"
-  if [[ -n "${CRANK_IMAGE:-}" ]]; then
-    CRANK_IMG="$CRANK_IMAGE"
-  elif [[ -f "$CRANK_IMG" ]]; then
-    :
-  elif [[ -n "${CRANK_IMAGE_XZ:-}" && -f "$CRANK_IMAGE_XZ" ]]; then
-    xz -dc "$CRANK_IMAGE_XZ" > "$CRANK_IMG"
-  elif [[ -f "$DOWNLOADS/crankkos-bobcatrk3566-1.0.0.img.xz" ]]; then
-    xz -dc "$DOWNLOADS/crankkos-bobcatrk3566-1.0.0.img.xz" > "$CRANK_IMG"
-  else
-    cat >&2 <<'MSG'
-BOOT_PROFILE=crank requires a Crankk Bobcat RK3566 image.
-Set CRANK_IMAGE=/path/to/crankkos-bobcatrk3566-1.0.0.img or
-CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz.
+need xz
+SIMPLE_BOOT_IMG="$WORK/bobcat-rk3566-simpleboot-reference.img"
+if [[ -n "${SIMPLE_BOOT_IMAGE:-}" ]]; then
+  SIMPLE_BOOT_IMG="$SIMPLE_BOOT_IMAGE"
+elif [[ -f "$SIMPLE_BOOT_IMG" ]]; then
+  :
+elif [[ -n "${SIMPLE_BOOT_IMAGE_XZ:-}" && -f "$SIMPLE_BOOT_IMAGE_XZ" ]]; then
+  xz -dc "$SIMPLE_BOOT_IMAGE_XZ" > "$SIMPLE_BOOT_IMG"
+elif [[ -f "$DOWNLOADS/bobcat-rk3566-simpleboot-reference.img.xz" ]]; then
+  xz -dc "$DOWNLOADS/bobcat-rk3566-simpleboot-reference.img.xz" > "$SIMPLE_BOOT_IMG"
+else
+  cat >&2 <<'MSG'
+BOOT_PROFILE=simple requires a Bobcat RK3566 simple boot reference image.
+Set SIMPLE_BOOT_IMAGE=/path/to/bobcat-rk3566-reference.img or
+SIMPLE_BOOT_IMAGE_XZ=/path/to/bobcat-rk3566-reference.img.xz.
 MSG
-    exit 2
-  fi
+  exit 2
 fi
 
-echo "Reference image partitions:"
-python3 "$TOOLS/partinfo.py" "$NEBRA_IMG"
-if [[ "$BOOT_PROFILE" == "crank" ]]; then
-  echo "Crank boot image partitions:"
-  python3 "$TOOLS/partinfo.py" "$CRANK_IMG"
-fi
+echo "Support image partitions:"
+python3 "$TOOLS/partinfo.py" "$SUPPORT_IMG"
+echo "Simple boot reference image partitions:"
+python3 "$TOOLS/partinfo.py" "$SIMPLE_BOOT_IMG"
 
 BOARD="$WORK/board-support"
 PKTFWD="$WORK/pktfwd"
 mkdir -p "$BOARD" "$PKTFWD"
-NEBRA_P1="$WORK/nebra-part1-fat.img"
-NEBRA_ROOTA="$WORK/nebra-rootA.img"
-NEBRA_DATA="$WORK/nebra-data.img"
-extract_partition "$NEBRA_IMG" 1 "$NEBRA_P1"
-extract_partition "$NEBRA_IMG" 2 "$NEBRA_ROOTA"
-extract_partition "$NEBRA_IMG" 6 "$NEBRA_DATA"
+SUPPORT_DATA="$WORK/support-data.img"
+extract_partition "$SUPPORT_IMG" 6 "$SUPPORT_DATA"
 
-CRANK_P1=""
-if [[ "$BOOT_PROFILE" == "crank" ]]; then
-  CRANK_P1="$WORK/crank-part1-fat.img"
-  extract_partition "$CRANK_IMG" 1 "$CRANK_P1"
-fi
+SIMPLE_BOOT_P1="$WORK/simpleboot-part1-fat.img"
+extract_partition "$SIMPLE_BOOT_IMG" 1 "$SIMPLE_BOOT_P1"
 
-if [[ "$BOOT_PROFILE" == "crank" ]]; then
-  mcopy -i "$CRANK_P1" ::Image "$BOARD/Image" >/dev/null
-  mcopy -i "$CRANK_P1" ::rk3566-bobcat.dtb "$BOARD/rk3566-bobcat.dtb" >/dev/null
-else
-  debugfs_dump "$NEBRA_ROOTA" "/boot/Image" "$BOARD/Image"
-  debugfs_dump "$NEBRA_ROOTA" "/boot/rk3566-bobcat.dtb" "$BOARD/rk3566-bobcat.dtb"
-  mcopy -i "$NEBRA_P1" ::idbloader.bin "$BOARD/idbloader.bin" >/dev/null 2>&1 || true
-  mcopy -i "$NEBRA_P1" ::uboot.img "$BOARD/uboot.img" >/dev/null 2>&1 || true
-fi
+mcopy -i "$SIMPLE_BOOT_P1" ::Image "$BOARD/Image" >/dev/null
+mcopy -i "$SIMPLE_BOOT_P1" ::rk3566-bobcat.dtb "$BOARD/rk3566-bobcat.dtb" >/dev/null
 
-debugfs_dump "$NEBRA_DATA" "$LORA_PKT_FWD_PATH" "$PKTFWD/lora_pkt_fwd"
-debugfs_dump "$NEBRA_DATA" "$CHIP_ID_PATH" "$PKTFWD/chip_id"
-debugfs_dump "$NEBRA_DATA" "$RESET_LGW_PATH" "$PKTFWD/reset_lgw.sh"
-debugfs_dump "$NEBRA_DATA" "$GATEWAY_MFR_PATH" "$PKTFWD/gateway_mfr_aarch64"
+debugfs_dump "$SUPPORT_DATA" "$LORA_PKT_FWD_PATH" "$PKTFWD/lora_pkt_fwd"
+debugfs_dump "$SUPPORT_DATA" "$CHIP_ID_PATH" "$PKTFWD/chip_id"
+debugfs_dump "$SUPPORT_DATA" "$RESET_LGW_PATH" "$PKTFWD/reset_lgw.sh"
+debugfs_dump "$SUPPORT_DATA" "$GATEWAY_MFR_PATH" "$PKTFWD/gateway_mfr_aarch64"
 rm -rf "$PKTFWD/templates"
 mkdir -p "$PKTFWD/templates.tmp"
-debugfs -R "rdump $TEMPLATES_PATH $PKTFWD/templates.tmp" "$NEBRA_DATA" >/dev/null 2>&1 || true
+debugfs -R "rdump $TEMPLATES_PATH $PKTFWD/templates.tmp" "$SUPPORT_DATA" >/dev/null 2>&1 || true
 if [[ -d "$PKTFWD/templates.tmp/lora_templates_sx1302" ]]; then
   mv "$PKTFWD/templates.tmp/lora_templates_sx1302" "$PKTFWD/templates"
 else
@@ -332,32 +329,15 @@ e2fsck -fy "$ROOTFS" >/dev/null
 
 BOOT_FAT="$WORK/boot-fat.img"
 rm -f "$BOOT_FAT"
-if [[ "$BOOT_PROFILE" == "crank" ]]; then
-  cp "$CRANK_P1" "$BOOT_FAT"
-else
-  truncate -s $(( P1_SECTORS * 512 )) "$BOOT_FAT"
-  mkfs.fat -F 16 -n RESIN-BOOT "$BOOT_FAT" >/dev/null
-  BOOT_FILES="$WORK/boot-fat-files"
-  rm -rf "$BOOT_FILES"
-  mkdir -p "$BOOT_FILES"
-  touch "$BOOT_FILES/balena-image"
-  touch "$BOOT_FILES/extra_uEnv.txt"
-  cp "$BOARD/idbloader.bin" "$BOOT_FILES/idbloader.bin" 2>/dev/null || true
-  cp "$BOARD/uboot.img" "$BOOT_FILES/uboot.img" 2>/dev/null || true
-  for file in "$BOOT_FILES"/*; do
-    [[ -f "$file" ]] || continue
-    mcopy -i "$BOOT_FAT" "$file" "::$(basename "$file")"
-  done
+if [[ "$BOOT_PROFILE" == "simple" ]]; then
+  cp "$SIMPLE_BOOT_P1" "$BOOT_FAT"
 fi
 
 OUT="$DIST/${IMAGE_NAME}.img"
 TMP_OUT="$WORK/${IMAGE_NAME}.img"
 rm -f "$TMP_OUT" "$OUT"
 truncate -s "${IMAGE_SIZE_MIB}M" "$TMP_OUT"
-PREBOOT_IMAGE="$NEBRA_IMG"
-if [[ "$BOOT_PROFILE" == "crank" ]]; then
-  PREBOOT_IMAGE="$CRANK_IMG"
-fi
+PREBOOT_IMAGE="$SIMPLE_BOOT_IMG"
 dd if="$PREBOOT_IMAGE" of="$TMP_OUT" bs=512 count="$P1_START" conv=notrunc status=none
 dd if="$BOOT_FAT" of="$TMP_OUT" bs=512 seek="$P1_START" conv=notrunc status=none
 dd if="$ROOTFS" of="$TMP_OUT" bs=1048576 seek="$(( P2_START / 2048 ))" conv=notrunc status=progress

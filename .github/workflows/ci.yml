@@ -6,7 +6,10 @@ on:
 
 jobs:
   lint:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Check shell syntax
@@ -17,4 +20,3 @@ jobs:
       - name: Check Python syntax
         run: |
           python3 -m py_compile tools/*.py image/rootfs-overlay/usr/local/lib/bobcat-miner/*.py
-

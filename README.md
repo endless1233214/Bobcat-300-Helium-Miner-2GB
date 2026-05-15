@@ -8,7 +8,7 @@ The goal is a reproducible Linux image with:
 - Helium `gateway-rs` using the onboard ECC608 identity chip.
 - SX1302 packet forwarder configured for the Bobcat radio.
 - Local LAN web UI for status, logs, region config, and service restarts.
-- No Nebra, Crankk, BalenaCloud, or vendor cloud dependency.
+- No vendor cloud dependency.
 
 ## Current Status
 
@@ -22,10 +22,10 @@ board-support pieces needed to boot, and writes a custom image to `dist/`.
 Prebuilt images, when published, should be attached to GitHub Releases rather
 than committed to the repository.
 
-The latest field-tested path is the Crankk-style boot profile. On the first test
-Bobcat, that image booted, brought up Ethernet, started `gateway-rs`, initialized
-the SX1302 packet forwarder, and acknowledged local `PUSH_DATA`/`PULL_DATA`
-traffic between the packet forwarder and gateway.
+The latest field-tested path is the simple two-partition boot profile. On the
+first test Bobcat, that image booted, brought up Ethernet, started
+`gateway-rs`, initialized the SX1302 packet forwarder, and acknowledged local
+`PUSH_DATA`/`PULL_DATA` traffic between the packet forwarder and gateway.
 
 ## Quick Start On macOS
 
@@ -34,6 +34,14 @@ Install dependencies and build `rkdeveloptool`:
 ```sh
 scripts/bootstrap-macos.sh
 ```
+
+On Linux or Windows via WSL2, use:
+
+```sh
+scripts/bootstrap-linux.sh
+```
+
+Windows-specific notes are in `docs/windows.md`.
 
 Detect a Bobcat in Rockchip Loader/Maskrom mode:
 
@@ -47,19 +55,12 @@ Read safe hardware info:
 scripts/bobcat-info.sh
 ```
 
-Build the custom image:
+Build with the field-tested simple boot path:
 
 ```sh
-REGION=US915 PF_REGION=US915_SB2 scripts/build-image.sh
-```
-
-Build with the Crankk-style boot path, useful when validating plain Debian
-userspace on Bobcat hardware:
-
-```sh
-BOOT_PROFILE=crank \
-CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
-IMAGE_NAME=bobcat300-rk3566-crankboot \
+SUPPORT_IMAGE_ZIP=/path/to/bobcat-rk3566-support.zip \
+SIMPLE_BOOT_IMAGE_XZ=/path/to/bobcat-rk3566-reference.img.xz \
+IMAGE_NAME=bobcat300-rk3566-simpleboot \
 REGION=US915 PF_REGION=US915_SB2 \
 scripts/build-image.sh
 ```
@@ -89,8 +90,8 @@ first-run setup mode instead so everyone does not share the same password:
 
 ```sh
 WEBUI_CREDENTIAL_MODE=setup \
-BOOT_PROFILE=crank \
-CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
+SUPPORT_IMAGE_ZIP=/path/to/bobcat-rk3566-support.zip \
+SIMPLE_BOOT_IMAGE_XZ=/path/to/bobcat-rk3566-reference.img.xz \
 scripts/build-image.sh
 ```
 
@@ -116,10 +117,13 @@ AUTHORIZED_KEY_FILE=~/.ssh/id_ed25519.pub scripts/build-image.sh
   115200 in many images.
 - DIY Helium gateways are data-only unless approved by the Helium maker
   program.
+- Helium app Bluetooth onboarding is not implemented yet; see
+  `docs/onboarding.md` for the planned Wi-Fi/BLE path.
 
 ## Repository Layout
 
 - `scripts/` - host-side build, detect, dump, and flash helpers.
 - `tools/` - small Python utilities used by the image builder.
 - `image/rootfs-overlay/` - files injected into the Debian root filesystem.
-- `docs/` - hardware notes, flashing workflow, and research findings.
+- `docs/` - hardware notes, flashing workflow, Windows setup, onboarding notes,
+  and research findings.

@@ -46,6 +46,8 @@ scripts/bobcat-dump-emmc.sh backups/bobcat-emmc.img 122142720
 Build an image first:
 
 ```sh
+SUPPORT_IMAGE_ZIP=/path/to/bobcat-rk3566-support.zip \
+SIMPLE_BOOT_IMAGE_XZ=/path/to/bobcat-rk3566-reference.img.xz \
 scripts/build-image.sh
 ```
 
@@ -72,13 +74,13 @@ console=ttyFIQ0,1500000
 
 So the UART speed to try is `1500000`, not `115200`.
 
-There is also a Crankk-style boot profile in `scripts/build-image.sh`. It uses
-the known-working Crankk Bobcat RK3566 preboot area and FAT boot script while
-keeping this project's custom Debian root filesystem:
+There is also a simple boot profile in `scripts/build-image.sh`. It uses a
+known-working Bobcat RK3566 preboot area and FAT boot script while keeping this
+project's custom Debian root filesystem:
 
 ```sh
-BOOT_PROFILE=crank \
-CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
-IMAGE_NAME=bobcat300-rk3566-crankboot \
+SUPPORT_IMAGE_ZIP=/path/to/bobcat-rk3566-support.zip \
+SIMPLE_BOOT_IMAGE_XZ=/path/to/bobcat-rk3566-reference.img.xz \
+IMAGE_NAME=bobcat300-rk3566-simpleboot \
 scripts/build-image.sh
 ```

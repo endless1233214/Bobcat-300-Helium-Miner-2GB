@@ -13,8 +13,8 @@
 
 ## Reference Image
 
-- Latest reference image observed during this bring-up:
-  `v1.3.3-helium-bobcat-rk3566-2024-07-12-OpenFleet`
+- Latest support/reference image observed during this bring-up:
+  `2024-07-12 Bobcat RK3566 support image`
 - Kernel string from reference image:
   `Linux version 4.19.232-rockchip-standard`
 - The reference U-Boot environment loads `/boot/Image` and
@@ -33,20 +33,20 @@ The first custom image uses:
 
 ## Known-Good Image Comparison
 
-The Crankk Bobcat RK3566 image uses a simpler boot layout than Nebra/OpenFleet:
+A known-good Bobcat RK3566 image uses a simpler boot layout than the vendor-style dual-root layout:
 
 - partition 1 starts at LBA 40960 and contains `boot.scr`, `uEnv.txt`, `Image`,
   `initrd.gz`, and `rk3566-bobcat.dtb`
 - partition 2 starts at LBA 204800 and is the root filesystem
 - `boot.scr` sets `root=/dev/mmcblk0p2` and passes an initrd to `booti`
 
-This is useful for a plain root filesystem because it avoids the Nebra/Balena
-U-Boot environment that discovers the root partition by UUID and expects a
-Balena-style boot marker.
+This is useful for a plain root filesystem because it avoids a vendor-style
+U-Boot environment that discovers the root partition by UUID and expects a boot
+marker partition.
 
-## First Crank-Boot Field Logs
+## First Simple-Boot Field Logs
 
-The `bobcat300-rk3566-crankboot-v3` image booted on the test Bobcat. Ethernet,
+The `bobcat300-rk3566-simpleboot-v3` image booted on the test Bobcat. Ethernet,
 `systemd`, the web UI, `gateway-rs`, the ECC identity, and the Helium router
 path were all alive:
 
@@ -65,7 +65,7 @@ forwarder.
 
 ## V4 Field Logs
 
-The `bobcat300-rk3566-crankboot-v4` image fixed the packet forwarder reset path.
+The `bobcat300-rk3566-simpleboot-v4` image fixed the packet forwarder reset path.
 Observed packet forwarder logs show the concentrator is running:
 
 - `PUSH_ACK` and `PULL_ACK` are received from local `gateway-rs`

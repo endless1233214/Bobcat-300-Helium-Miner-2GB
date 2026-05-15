@@ -14,9 +14,9 @@ For public images, build with first-run setup mode:
 
 ```sh
 WEBUI_CREDENTIAL_MODE=setup \
-BOOT_PROFILE=crank \
-CRANK_IMAGE_XZ=/path/to/crankkos-bobcatrk3566-1.0.0.img.xz \
-IMAGE_NAME=bobcat300-rk3566-crankboot-release \
+SUPPORT_IMAGE_ZIP=/path/to/bobcat-rk3566-support.zip \
+SIMPLE_BOOT_IMAGE_XZ=/path/to/bobcat-rk3566-reference.img.xz \
+IMAGE_NAME=bobcat300-rk3566-simpleboot-release \
 REGION=US915 PF_REGION=US915_SB2 \
 scripts/build-image.sh
 ```
@@ -32,11 +32,11 @@ per build and writes it to `dist/<image-name>.credentials.txt`.
 ## Suggested Release Artifact Flow
 
 ```sh
-xz -T0 -9 -k dist/bobcat300-rk3566-crankboot-release.img
+xz -T0 -9 -k dist/bobcat300-rk3566-simpleboot-release.img
 shasum -a 256 \
-  dist/bobcat300-rk3566-crankboot-release.img \
-  dist/bobcat300-rk3566-crankboot-release.img.xz \
-  > dist/bobcat300-rk3566-crankboot-release.sha256
+  dist/bobcat300-rk3566-simpleboot-release.img \
+  dist/bobcat300-rk3566-simpleboot-release.img.xz \
+  > dist/bobcat300-rk3566-simpleboot-release.sha256
 ```
 
 Attach the compressed image and checksum file to the GitHub Release. Keep the
