@@ -62,3 +62,24 @@ The log showed `sh: 1: ./reset_lgw.sh: not found` followed by
 `ERROR: failed to reset SX1302`. The wrapper now copies `reset_lgw.sh` into the
 run directory and exports `CONCENTRATOR_RESET_PIN=149` before launching the
 forwarder.
+
+## V4 Field Logs
+
+The `bobcat300-rk3566-crankboot-v4` image fixed the packet forwarder reset path.
+Observed packet forwarder logs show the concentrator is running:
+
+- `PUSH_ACK` and `PULL_ACK` are received from local `gateway-rs`
+- `PUSH_DATA acknowledged: 100.00%`
+- `PULL_DATA sent: 3 (100.00% acknowledged)`
+- the SX1302 `INST` counter increments across status intervals
+- `TX errors: 0`
+
+Gateway-rs initially reported DNS/connectivity timeouts to Helium mainnet, then
+recovered without service changes. It later fetched US915 region config and
+initialized `beaconer` and `packet_router` conduit sessions. This indicates the
+remaining early warnings are network/DNS availability during boot, not a broken
+gateway configuration.
+
+`RF packets received by concentrator: 0` is acceptable during quiet test windows;
+it means no LoRa packets were heard in that interval, not that the concentrator
+failed to initialize.
