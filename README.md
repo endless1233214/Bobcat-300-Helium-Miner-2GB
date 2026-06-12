@@ -27,6 +27,21 @@ first test Bobcat, that image booted, brought up Ethernet, started
 `gateway-rs`, initialized the SX1302 packet forwarder, and acknowledged local
 `PUSH_DATA`/`PULL_DATA` traffic between the packet forwarder and gateway.
 
+## Download The Prebuilt Image
+
+Download the latest ready-to-flash image from:
+
+- [Bobcat 300 Community Image v1.0.0](https://github.com/endless1233214/Bobcat-300-Helium-Miner-2GB/releases/tag/v1.0.0)
+- [Direct `.img.xz` download](https://github.com/endless1233214/Bobcat-300-Helium-Miner-2GB/releases/download/v1.0.0/bobcat300-rk3566-community-1.0.0.img.xz)
+- [SHA256 checksums](https://github.com/endless1233214/Bobcat-300-Helium-Miner-2GB/releases/download/v1.0.0/SHA256SUMS)
+
+Decompress the `.img.xz` file, flash the resulting `.img`, reconnect normal
+power and Ethernet, and find the Bobcat in your router's DHCP table. Open
+`http://<bobcat-ip>/` from a trusted LAN and create your own admin login.
+
+The public image contains no shared web password, authorized SSH key, machine
+ID, or SSH host key.
+
 ## Quick Start On macOS
 
 Refer to Docs for Windows/Linux
