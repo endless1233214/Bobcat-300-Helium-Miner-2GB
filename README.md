@@ -27,6 +27,9 @@ first test Bobcat, that image booted, brought up Ethernet, started
 `gateway-rs`, initialized the SX1302 packet forwarder, and acknowledged local
 `PUSH_DATA`/`PULL_DATA` traffic between the packet forwarder and gateway.
 
+> This project is free and open source. If it helps revive your Bobcat 300,
+> [support continued development and hardware testing on Buy Me a Coffee](https://buymeacoffee.com/endlessdev). ☕
+
 ## Download The Prebuilt Image
 
 Download the latest ready-to-flash image from:
@@ -137,6 +140,7 @@ AUTHORIZED_KEY_FILE=~/.ssh/id_ed25519.pub scripts/build-image.sh
 - Helium app Bluetooth onboarding is not implemented yet; see
   `docs/onboarding.md` for the planned Wi-Fi/BLE path.
 
+
 ## Repository Layout
 
 - `scripts/` - host-side build, detect, dump, and flash helpers.
@@ -144,3 +148,11 @@ AUTHORIZED_KEY_FILE=~/.ssh/id_ed25519.pub scripts/build-image.sh
 - `image/rootfs-overlay/` - files injected into the Debian root filesystem.
 - `docs/` - hardware notes, flashing workflow, Windows setup, onboarding notes,
   and research findings.
+
+## Support Development
+
+This project is developed independently and provided free of charge. Support
+helps cover test hardware, replacement miners, storage, hosting, and the time
+required to reverse engineer, build, flash, and validate community images.
+
+[Support EndlessDev on Buy Me a Coffee](https://buymeacoffee.com/endlessdev)
